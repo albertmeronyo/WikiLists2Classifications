@@ -57,15 +57,21 @@ class TaxonomyHTMLParser(HTMLParser):
     def handle_data(self, data):
         if self.titleFound:
             self.currentData = data
-            self.taxonomy.addEntry(self.parentStack[-1], self.currentData)
+            if not self.isUninteresting(self.parentStack[-1]):
+                self.taxonomy.addEntry(self.parentStack[-1], self.currentData)
             self.titleFound = False
         if self.currentList and self.entryFound:
             self.currentData = data
-            self.taxonomy.addEntry(self.parentStack[-1], self.currentData)
+            if not self.isUninteresting(self.parentStack[-1]):
+                self.taxonomy.addEntry(self.parentStack[-1], self.currentData)
             self.entryFound = False
 
     def isHeader(self, tag):
         return tag in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6')
+
+    def isUninteresting(self, data):
+        return data in ('Content', 'Navigation menu', 'See also')
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract SKOS taxonomies from Wikipedia pages")
