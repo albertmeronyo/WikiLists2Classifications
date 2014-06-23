@@ -6,6 +6,7 @@ import json
 import logging
 from rdflib import Graph
 from HTMLParser import HTMLParser
+from lxml import etree
 
 # The extracted classification goes into a dict
 class Classification:
@@ -142,6 +143,15 @@ if __name__ == "__main__":
     # instantiate the HTML parser
     HTMLparser = ClassificationHTMLParser(classification)
     HTMLparser.feed(html)
+
+
+    logging.info('Doing lxml stuff...')
+    tree = etree.HTML(html)
+    r = tree.xpath('//h2/span')
+    print len(r)
+    for h in r:
+        print h.text
+    
 
     logging.info('Converting to %s and serializing to %s...' % (args.format, args.output))
     converter = ClassificationSerializer(classification)
