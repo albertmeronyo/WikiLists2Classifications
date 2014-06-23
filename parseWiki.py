@@ -6,23 +6,36 @@ import json
 from HTMLParser import HTMLParser
 
 # The extracted taxonomy goes into a dict
-taxonomy = {}
+class Taxonomy:
+    def __init__(self):
+        self.taxonomy = {}
+
+    def addEntry(self, parent, child):
+        if not parent in self.taxonomy:
+            self.taxonomy[parent] = []
+        self.taxonomy[parent].append(child)
+
+    def layout(self):
+        print(json.dumps(self.taxonomy, indent=4))        
 
 # create a subclass and override the handler methods
-class MyHTMLParser(HTMLParser):
-    titleFound = False
-    entryFound = False
-    currentList = 0
-    previousLevel = 0
-    currentLevel = 0
-    currentData = None
-    parentStack = []
+class TaxonomyHTMLParser(HTMLParser):
+    def __init__(self, __taxonomy):
+        HTMLParser.__init__(self)
+        self.titleFound = False
+        self.entryFound = False
+        self.currentList = 0
+        self.previousLevel = 0
+        self.currentLevel = 0
+        self.currentData = None
+        self.parentStack = []
+        self.taxonomy = __taxonomy
 
     def handle_starttag(self, tag, attrs):
         if tag == 'li':
             if not attrs:
                 self.entryFound = True
-        if tag == 'h1' or tag == 'h2' or tag == 'h3' or tag == 'h4' or tag == 'h5' or tag == 'h6':
+        if self.isHeader(tag):
             self.titleFound = True
             self.previousLevel = self.currentLevel
             self.currentLevel = int(tag[-1])
@@ -38,46 +51,39 @@ class MyHTMLParser(HTMLParser):
             self.currentList -= 1
             self.currentLevel -= 1
             self.parentStack.pop()
-        if tag == 'h1' or tag == 'h2' or tag == 'h3' or tag == 'h4' or tag == 'h5' or tag == 'h6':
+        if self.isHeader(tag):
             self.titleFound = False
 
     def handle_data(self, data):
         if self.titleFound:
             self.currentData = data
-            print self.currentLevel
-            print self.parentStack[-1]
-            print self.currentData
-            if not self.parentStack[-1] in taxonomy:
-                taxonomy[self.parentStack[-1]] = []
-            taxonomy[self.parentStack[-1]].append(self.currentData)
+            self.taxonomy.addEntry(self.parentStack[-1], self.currentData)
             self.titleFound = False
         if self.currentList and self.entryFound:
             self.currentData = data
-            print self.currentLevel
-            print self.parentStack[-1]
-            print self.currentData
-            if not self.parentStack[-1] in taxonomy:
-                taxonomy[self.parentStack[-1]] = []
-            taxonomy[self.parentStack[-1]].append(self.currentData)
+            self.taxonomy.addEntry(self.parentStack[-1], self.currentData)
             self.entryFound = False
-  
 
+    def isHeader(self, tag):
+        return tag in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6')
 
-parser = argparse.ArgumentParser(description="Extract SKOS taxonomies from Wikipedia pages")
-parser.add_argument('--input', '-i',
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Extract SKOS taxonomies from Wikipedia pages")
+    parser.add_argument('--input', '-i',
                     help = "URL of the source Wikipedia page", 
                     required = True)
+    
+    args = parser.parse_args()
 
-args = parser.parse_args()
+    response = urllib.urlopen(args.input)
+    html = response.read()
 
-response = urllib.urlopen(args.input)
-html = response.read()
+    taxonomy = Taxonomy()
 
-# instantiate the parser and fed it some HTML
-HTMLparser = MyHTMLParser()
+    # instantiate the parser and fed it some HTML
+    HTMLparser = TaxonomyHTMLParser(taxonomy)
+    HTMLparser.feed(html)
 
-HTMLparser.feed(html)
+    # print html
+    taxonomy.layout()
 
-# print html
-
-print(json.dumps(taxonomy, indent=4))
