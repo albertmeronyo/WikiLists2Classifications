@@ -149,7 +149,7 @@ if __name__ == "__main__":
     tree = etree.HTML(html)
 
     # Title
-    r = tree.xpath('//h1/span[@dir="auto"][1] | //h2/span[@class="mw-headline"] | //h3/span[@class="mw-headline"] | //ul/li | //ul/li/a')
+    r = tree.xpath('//h1/span[@dir="auto"][1] | //h2/span[@class="mw-headline"] | //h3/span[@class="mw-headline"] | //ul/li | //ul/li/a[1]')
     for h in r:
         if h.text and len(h.text):
             print h.text
