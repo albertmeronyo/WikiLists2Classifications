@@ -147,11 +147,15 @@ if __name__ == "__main__":
 
     logging.info('Doing lxml stuff...')
     tree = etree.HTML(html)
-    r = tree.xpath('//h2/span')
-    print len(r)
+
+    # Title
+    r = tree.xpath('//h1/span[@dir="auto"][1] | //h2/span[@class="mw-headline"] | //h3/span[@class="mw-headline"] | //ul/li | //ul/li/a')
     for h in r:
-        print h.text
-    
+        if h.text and len(h.text):
+            print h.text
+
+
+        
 
     logging.info('Converting to %s and serializing to %s...' % (args.format, args.output))
     converter = ClassificationSerializer(classification)
