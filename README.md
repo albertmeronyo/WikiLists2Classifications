@@ -40,8 +40,8 @@ in your favourite shell.
 ## Dependencies
 
 - Python 2.7.5
-- RDFLib (get it (here)[https://github.com/RDFLib])
-- lxml (get it (here)[http://lxml.de/])
+- [RDFLib](https://github.com/RDFLib)
+- [lxml](http://lxml.de/)
 
 ## Credits
 
