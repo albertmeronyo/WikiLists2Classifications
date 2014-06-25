@@ -27,15 +27,36 @@ class WikiLists2SKOS:
         tree = etree.ElementTree(root)
         
         t = tree.xpath(self.TITLE_XPATH)
-        conceptScheme = self.namespaces['w2s'][self.URIzeString(t[0].text)]
-        self.g.add( (conceptScheme, RDF.type, SKOS.ConceptScheme) )
-        self.g.add( (conceptScheme, SKOS.prefLabel, Literal(t[0].text)) )
+        conceptSchemeURI = self.namespaces['w2s'][self.URIzeString(t[0].text)]
+        self.g.add( (conceptSchemeURI, RDF.type, SKOS.ConceptScheme) )
+        self.g.add( (conceptSchemeURI, SKOS.prefLabel, Literal(t[0].text)) )
 
         r = tree.xpath(self.WIKILISTS_XPATH)
         for h in r:
             if h.text and len(h.text):
-                print h.text
-                print tree.getpath(h)
+                conceptURI = self.namespaces['w2s'][self.URIzeString(h.text)]
+                self.g.add( (conceptURI, RDF.type, SKOS.Concept) )
+                self.g.add( (conceptURI, SKOS.prefLabel, Literal(h.text)) )
+                logging.debug('Category: %s' % h.text)
+                parent = h.getparent().getparent().getparent()
+                parentString = None
+                if parent.tag == 'li':
+                    logging.debug('Parent: %s' % h.getparent().getparent().getparent()[0].text)
+                    parentString = h.getparent().getparent().getparent()[0].text
+                elif parent.tag == 'div' and parent.get('id') == 'mw-content-text':
+                    cat = None
+                    for child in parent:
+                        if str(child.tag)[0] == 'h':
+                            cat = child
+                        if child == h.getparent().getparent():
+                            break
+                    logging.debug('Parent: %s' % cat[0].text)
+                    parentString = cat[0].text
+                else:
+                    logging.debug("Couldn't find a parent for this category")
+                parentURI = self.namespaces['w2s'][self.URIzeString(parentString)]
+                self.g.add( (conceptURI, SKOS.broader, URIRef(parentURI)) )
+                logging.debug('---')
 
     def serialize(self, __file):
         outputFile = open(__file, 'w')
