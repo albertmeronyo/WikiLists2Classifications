@@ -2,125 +2,60 @@
 
 import urllib
 import argparse
-import json
 import logging
-from rdflib import Graph
-from HTMLParser import HTMLParser
+import re
+from rdflib import Graph, Namespace, Literal, URIRef
+from rdflib.namespace import Namespace, RDF, SKOS
 from lxml import etree
 
-# The extracted classification goes into a dict
-class Classification:
-    def __init__(self):
-        self.idsToLabels = {}
-        self.classification = {}
-        self.depth = {}
+class WikiLists2SKOS:
+    TITLE_XPATH = '//h1/span[@dir="auto"][1]'
+    WIKILISTS_XPATH = '/html/body/div[3]/div[2]/div[4]/h2/span[@class="mw-headline"] | /html/body/div[3]/div[2]/div[4]/h3/span[@class="mw-headline"] | /html/body/div[3]/div[2]/div[4]/h4/span[@class="mw-headline"] | /html/body/div[3]/div[2]/div[4]/h5/span[@class="mw-headline"] | /html/body/div[3]/div[2]/div[4]/h6/span[@class="mw-headline"] | /html/body/div[3]/div[2]/div[4]//ul/li[1] | /html/body/div[3]/div[2]/div[4]//ul/li/a[1]'
+    namespaces = {
+        'w2s':Namespace('http://example.org/w2s/resource/'),
+        'skos':Namespace('http://www.w3.org/2004/02/skos/core#')
+    }
 
-    def addEntry(self, parent, child, depth):
-        if not parent in self.classification:
-            self.classification[parent] = []
-        self.classification[parent].append(child)
-        self.depth[parent] = depth
-        self.depth[child] = depth + 1
-
-    def getRoot(self):
-        return self.classification[None][0]
-
-    def layoutJSON(self):        
-        print(json.dumps(self.classification, indent=4))
-
-class ClassificationSerializer:
-    def __init__(self, __classification):
-        self.classification = __classification
-        self.graph = Graph()
+    def __init__(self, __targetURL):
+        logging.info('Reading remote URL %s...' % args.input)
+        self.html = urllib.urlopen(__targetURL).read()
+        self.g = Graph()
+        self.g.bind('skos', SKOS)        
 
     def toSKOS(self):
-        print 'toSKOS'
+        root = etree.HTML(self.html)
+        tree = etree.ElementTree(root)
+        
+        t = tree.xpath(self.TITLE_XPATH)
+        conceptScheme = self.namespaces['w2s'][self.URIzeString(t[0].text)]
+        self.g.add( (conceptScheme, RDF.type, SKOS.ConceptScheme) )
+        self.g.add( (conceptScheme, SKOS.prefLabel, Literal(t[0].text)) )
 
-    def toQB(self):
-        print 'toQB'
-    
-# create a subclass and override the handler methods
-class ClassificationHTMLParser(HTMLParser):
-    def __init__(self, __classification):
-        HTMLParser.__init__(self)
-        self.endParsing = False
-        self.titleFound = False
-        self.entryFound = False
-        self.currentList = 0
-        self.previousLevel = 0
-        self.currentLevel = 0
-        self.currentData = None
-        self.parentStack = []
-        self.classification = __classification
+        r = tree.xpath(self.WIKILISTS_XPATH)
+        for h in r:
+            if h.text and len(h.text):
+                print h.text
+                print tree.getpath(h)
 
-    def handle_starttag(self, tag, attrs):
-        if tag == 'li':
-            if not attrs:
-                self.entryFound = True
-        if self.isHeader(tag):
-            self.titleFound = True
-            self.previousLevel = self.currentLevel
-            self.currentLevel = int(tag[-1])
-            levelDiff = self.currentLevel - self.previousLevel
-            if levelDiff > 0:
-                self.parentStack.append(self.currentData)
-            elif levelDiff < 0:
-                self.parentStack.pop()
-        if tag == 'ul':
-            self.currentList += 1
-            self.currentLevel += 1
-            self.parentStack.append(self.currentData)
-                    
-    def handle_endtag(self, tag):
-        if tag == 'ul':
-            self.currentList -= 1
-            self.currentLevel -= 1
-            self.parentStack.pop()
-        if self.isHeader(tag):
-            self.titleFound = False
+    def serialize(self, __file):
+        outputFile = open(__file, 'w')
+        turtle = self.g.serialize(None, format='turtle')
+        outputFile.writelines(turtle)
+        outputFile.close()
 
-    def handle_data(self, data):
-        if self.titleFound and not self.endParsing:
-            self.currentData = data
-            logging.debug(self.currentData)
-            logging.debug(self.parentStack[-1])
-            logging.debug(self.currentLevel)
-            if not self.isUninteresting(self.parentStack[-1]) and not self.isUninteresting(self.currentData):
-                self.classification.addEntry(self.parentStack[-1], self.currentData, self.currentLevel)
-            self.titleFound = False
-        if self.currentList and self.entryFound and not self.endParsing:
-            self.currentData = data
-            logging.debug(self.currentData)
-            logging.debug(self.parentStack[-1])
-            logging.debug(self.currentLevel)
-            if not self.isUninteresting(self.parentStack[-1]) and not self.isUninteresting(self.currentData):
-                self.classification.addEntry(self.parentStack[-1], self.currentData, self.currentLevel)
-            self.entryFound = False
-
-    def handle_comment(self, data):
-        if data.find('parser cache') >= 0:
-            self.endParsing = True
-
-    def isHeader(self, tag):
-        return tag in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6')
-
-    def isUninteresting(self, data):
-        return data in ('Contents', 'Navigation menu', 'See also', 'External links', 'References')
+    def URIzeString(self, __nonuri):
+        return urllib.quote(re.sub('\s|\(|\)|,|\.','_',unicode(__nonuri).strip()).encode('utf-8', 'ignore'))
     
 if __name__ == "__main__":
     # Parse commandline arguments
     parser = argparse.ArgumentParser(description="Extract SKOS taxonomies from Wikipedia pages")
     parser.add_argument('--input', '-i',
-                        help = "URL of the source Wikipedia page", 
+                        help = "URL of the source Wiki page", 
                         required = True)
     parser.add_argument('--verbose', '-v',
                         help = "Be verbose -- debug logging level",
                         required = False, 
                         action = 'store_true')
-    parser.add_argument('--format', '-f',
-                        help = "Output format: SKOS, QB",
-                        required = True,
-                        choices = ['SKOS', 'QB'])
     parser.add_argument('--output', '-o',
                         help = "Output filename",
                         required = True)
@@ -132,36 +67,13 @@ if __name__ == "__main__":
     else:
         logging.basicConfig(level=logging.INFO)
 
-    logging.info('Reading remote URL %s...' % args.input)
-    response = urllib.urlopen(args.input)
-    html = response.read()
+    logging.info('Initializing...')
+    converter = WikiLists2SKOS(args.input)
 
-    logging.info('Initializing local data structure...')
-    classification = Classification()
+    logging.info('Converting...')
+    converter.toSKOS()
 
-    logging.info('Parsing HTML...')
-    # instantiate the HTML parser
-    HTMLparser = ClassificationHTMLParser(classification)
-    HTMLparser.feed(html)
-
-
-    logging.info('Doing lxml stuff...')
-    tree = etree.HTML(html)
-
-    # Title
-    r = tree.xpath('//h1/span[@dir="auto"][1] | //h2/span[@class="mw-headline"] | //h3/span[@class="mw-headline"] | //ul/li | //ul/li/a[1]')
-    for h in r:
-        if h.text and len(h.text):
-            print h.text
-
-
-        
-
-    logging.info('Converting to %s and serializing to %s...' % (args.format, args.output))
-    converter = ClassificationSerializer(classification)
-    if args.format == 'SKOS':
-        converter.toSKOS()
-    elif args.format == 'QB':
-        converter.toQB()
+    logging.info('Serializing to output file %s' % args.output)
+    converter.serialize(args.output)
 
     logging.info('Done.')
