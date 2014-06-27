@@ -16,8 +16,11 @@ class WikiLists2SKOS:
         'skos':Namespace('http://www.w3.org/2004/02/skos/core#')
     }
 
-    def __init__(self, __targetURL):
-        logging.info('Reading remote URL %s...' % args.input)
+    def __init__(self, __targetURL, __logLevel):
+        self.log = logging.getLogger('WikiLists2SKOS')
+        self.log.setLevel(__logLevel)
+
+        self.log.info('Reading remote URL %s...' % args.input)
         self.html = urllib.urlopen(__targetURL).read()
         self.g = Graph()
         self.g.bind('skos', SKOS)        
@@ -37,11 +40,11 @@ class WikiLists2SKOS:
                 conceptURI = self.namespaces['w2s'][self.URIzeString(h.text)]
                 self.g.add( (conceptURI, RDF.type, SKOS.Concept) )
                 self.g.add( (conceptURI, SKOS.prefLabel, Literal(h.text)) )
-                logging.debug('Category: %s' % h.text)
+                self.log.debug('Category: %s' % h.text)
                 parent = h.getparent().getparent().getparent()
                 parentString = None
                 if parent.tag == 'li':
-                    logging.debug('Parent: %s' % h.getparent().getparent().getparent()[0].text)
+                    self.log.debug('Parent: %s' % h.getparent().getparent().getparent()[0].text)
                     parentString = h.getparent().getparent().getparent()[0].text
                 elif parent.tag == 'div' and parent.get('id') == 'mw-content-text':
                     cat = None
@@ -50,13 +53,13 @@ class WikiLists2SKOS:
                             cat = child
                         if child == h.getparent().getparent():
                             break
-                    logging.debug('Parent: %s' % cat[0].text)
+                    self.log.debug('Parent: %s' % cat[0].text)
                     parentString = cat[0].text
                 else:
-                    logging.debug("Couldn't find a parent for this category")
+                    self.log.debug("Couldn't find a parent for this category")
                 parentURI = self.namespaces['w2s'][self.URIzeString(parentString)]
                 self.g.add( (conceptURI, SKOS.broader, URIRef(parentURI)) )
-                logging.debug('---')
+                self.log.debug('---')
 
     def serialize(self, __file):
         outputFile = open(__file, 'w')
@@ -83,13 +86,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Logging
+    
+    logLevel = logging.INFO
     if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
+        logLevel = logging.DEBUG
+
+    logging.basicConfig(level=logLevel)
 
     logging.info('Initializing...')
-    converter = WikiLists2SKOS(args.input)
+    converter = WikiLists2SKOS(args.input, logLevel)
 
     logging.info('Converting...')
     converter.toSKOS()
